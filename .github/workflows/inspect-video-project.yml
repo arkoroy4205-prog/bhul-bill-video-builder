@@ -115,12 +115,15 @@ jobs:
             echo
             echo "Generated at: $(date -u)"
             echo
-            echo "Narration: public/voice.mp3 (generated in English)"
-            echo "Captions and scene labels: translated to English"
-            echo "Original composition: 1920x1080"\n            echo\n            echo "## Remaining Bengali text audit"\n            if [ -s bengali-audit.txt ]; then cat bengali-audit.txt; else echo "No Bengali characters found in source files."; fi
+            echo "English narration generated: $([ -f public/voice.mp3 ] && echo yes || echo no)"
+            echo "Composition dimensions: 1920x1080"
+            echo
+            echo "## Remaining Bengali text audit"
+            if [ -s bengali-audit.txt ]; then cat bengali-audit.txt; else echo "No Bengali characters found in audited source files."; fi
           } > project-build-report.md
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add project-build-report.md
           git commit -m "Publish English video build report" || exit 0
+          git pull --rebase origin main
           git push
