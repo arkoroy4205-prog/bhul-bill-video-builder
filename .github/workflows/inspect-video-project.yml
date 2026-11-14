@@ -84,6 +84,12 @@ jobs:
           b = s.index("\n    </AbsoluteFill>", a)
           s = s[:a] + s[b:]
           p.write_text(s)
+          p = Path("src/kit.tsx")
+          s = p.read_text().replace("ফলাফল", "RESULT")
+          p.write_text(s)
+          p = Path("src/brand.ts")
+          s = p.read_text().replace("আমার পেজ", "My page")
+          p.write_text(s)
           PY
       - name: Generate English narration
         run: |
