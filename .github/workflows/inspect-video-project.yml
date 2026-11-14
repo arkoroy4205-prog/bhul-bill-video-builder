@@ -1,0 +1,29 @@
+name: Inspect video project
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "bhul-bill-video-builder-16x9.zip"
+      - ".github/workflows/inspect-video-project.yml"
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Inspect uploaded ZIP
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/video-project
+          unzip -q bhul-bill-video-builder-16x9.zip -d /tmp/video-project
+          echo "=== FILES ==="
+          find /tmp/video-project -maxdepth 5 -type f | sort | head -250
+          echo "=== PACKAGE FILES ==="
+          while IFS= read -r pkg; do
+            echo "--- $pkg"
+            cat "$pkg"
+          done < <(find /tmp/video-project -name package.json -not -path '*/node_modules/*')
+          echo "=== ROOT / ENTRY CANDIDATES ==="
+          find /tmp/video-project -type f \( -name 'Root.tsx' -o -name 'index.ts' -o -name 'index.tsx' -o -name 'Video.tsx' \) -print
