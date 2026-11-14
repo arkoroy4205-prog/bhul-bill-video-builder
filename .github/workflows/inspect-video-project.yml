@@ -6,7 +6,7 @@ on:
       - "bhul-bill-video-builder-16x9.zip"
       - ".github/workflows/inspect-video-project.yml"
 permissions:
-  contents: read
+  contents: write
 jobs:
   inspect:
     runs-on: ubuntu-latest
@@ -18,12 +18,31 @@ jobs:
           set -euo pipefail
           mkdir -p /tmp/video-project
           unzip -q bhul-bill-video-builder-16x9.zip -d /tmp/video-project
-          echo "=== FILES ==="
-          find /tmp/video-project -maxdepth 5 -type f | sort | head -250
-          echo "=== PACKAGE FILES ==="
-          while IFS= read -r pkg; do
-            echo "--- $pkg"
-            cat "$pkg"
-          done < <(find /tmp/video-project -name package.json -not -path '*/node_modules/*')
-          echo "=== ROOT / ENTRY CANDIDATES ==="
-          find /tmp/video-project -type f \( -name 'Root.tsx' -o -name 'index.ts' -o -name 'index.tsx' -o -name 'Video.tsx' \) -print
+          {
+            echo "# Project inspection"
+            echo
+            echo "Generated: $(date -u)"
+            echo
+            echo "## Files"
+            find /tmp/video-project -maxdepth 6 -type f | sort | sed 's#^/tmp/video-project/##' | head -300
+            echo
+            echo "## package.json files"
+            while IFS= read -r pkg; do
+              echo
+              echo "### $pkg"
+              cat "$pkg"
+            done < <(find /tmp/video-project -name package.json -not -path '*/node_modules/*')
+            echo
+            echo "## Remotion / render config candidates"
+            find /tmp/video-project -type f \( -iname '*remotion*' -o -name 'Root.tsx' -o -name 'Video.tsx' -o -name 'index.ts' -o -name 'index.tsx' -o -name 'vite.config.*' -o -name 'tsconfig.json' \) -print | sort
+            echo
+            echo "## Archive top-level"
+            unzip -l bhul-bill-video-builder-16x9.zip | head -100
+          } > project-inspection.md
+      - name: Publish inspection report
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add project-inspection.md
+          git commit -m "Add automated project inspection report" || exit 0
+          git push
