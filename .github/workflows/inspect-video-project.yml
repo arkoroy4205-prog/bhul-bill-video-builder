@@ -1,4 +1,4 @@
-name: Build and render video
+name: Build English 16x9 video
 on:
   workflow_dispatch:
   push:
@@ -20,54 +20,107 @@ jobs:
           set -euo pipefail
           unzip -q bhul-bill-video-builder-16x9.zip -d "$RUNNER_TEMP/project"
           cp -a "$RUNNER_TEMP/project/bhul-bill-video-builder/template/." "$GITHUB_WORKSPACE/"
-      - name: Install dependencies
-        run: npm install --no-audit --no-fund
-      - name: Check Remotion composition and assets
-        id: check
-        shell: bash
+      - name: Convert story and captions to English
         run: |
-          set +e
-          npx remotion compositions src/index.ts --log=error > "$RUNNER_TEMP/compositions.log" 2>&1
-          comp_status=$?
-          cat "$RUNNER_TEMP/compositions.log"
-          echo "composition_status=$comp_status" >> "$GITHUB_OUTPUT"
-          missing=0
-          for f in public/voice.mp3 public/fonts/hind-siliguri-bengali-600-normal.woff2 public/fonts/hind-siliguri-bengali-700-normal.woff2 public/fonts/noto-serif-bengali-bengali-800-normal.woff2 public/sfx/pad.wav public/sfx/tick.wav public/sfx/stamp.wav public/sfx/pop.wav; do
-            if [ ! -f "$f" ]; then echo "MISSING ASSET: $f"; missing=1; fi
-          done
-          echo "missing_assets=$missing" >> "$GITHUB_OUTPUT"
-          {
-            echo "# Remotion build report"
-            echo
-            echo "Composition command exit code: $comp_status"
-            echo
-            echo "## Composition output"
-            cat "$RUNNER_TEMP/compositions.log"
-            echo
-            echo "## Asset check"
-            for f in public/voice.mp3 public/fonts/hind-siliguri-bengali-600-normal.woff2 public/fonts/hind-siliguri-bengali-700-normal.woff2 public/fonts/noto-serif-bengali-bengali-800-normal.woff2 public/sfx/pad.wav public/sfx/tick.wav public/sfx/stamp.wav public/sfx/pop.wav; do
-              if [ -f "$f" ]; then echo "PRESENT: $f"; else echo "MISSING: $f"; fi
-            done
-            echo
-            echo "## Project instructions"
-            cat "$RUNNER_TEMP/project/bhul-bill-video-builder/SKILL.md"
-          } > project-build-report.md
-          if [ "$comp_status" -ne 0 ]; then exit "$comp_status"; fi
-      - name: Render MP4 when required media is available
-        if: steps.check.outputs.composition_status == '0' && steps.check.outputs.missing_assets == '0'
-        run: npx remotion render src/index.ts StoryVideo out/bhul-bill-video-16x9.mp4 --codec h264
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path("src/data.ts")
+          s = p.read_text()
+          start = s.index("export const CAPS:")
+          end = s.index("\n\nexport const SPEAK:", start)
+          caps = """export const CAPS: Cap[] = [
+            { s: 0.10, e: 1.77, t: 'Tanvir studied all {night}.' },
+            { s: 2.38, e: 3.96, t: 'His dream was to pass the {BCS exam}.' },
+            { s: 4.64, e: 7.13, t: 'One day, he told his friend Shuvo\nat a {tea stall},' },
+            { s: 7.63, e: 9.88, t: '"{Don\'t tell anyone}, I\'m taking the BCS exam."', who: 'Tanvir' },
+            { s: 10.48, e: 11.73, t: 'Shuvo laughed and said,' },
+            { s: 12.00, e: 13.81, t: '"Relax, I won\'t tell {anyone}."', who: 'Shuvo' },
+            { s: 14.50, e: 16.86, t: 'Three days later, a neighbor\nasked him,' },
+            { s: 17.36, e: 19.50, t: '"I heard you\'re taking the {BCS exam}."', who: 'Neighbor' },
+            { s: 20.20, e: 22.88, t: 'His relatives said,\n"Good. {Let\'s see} what happens."' },
+            { s: 23.42, e: 25.81, t: 'His friends {teased} him: "Can you do it?"' },
+            { s: 26.42, e: 29.56, t: 'Whenever Tanvir studied, he felt\n{everyone} was watching him.' },
+            { s: 30.24, e: 30.92, t: 'The {pressure} grew,' },
+            { s: 31.58, e: 32.33, t: 'his {focus} faded.' },
+            { s: 33.00, e: 34.32, t: 'The {exam results} came out.' },
+            { s: 35.02, e: 35.59, t: 'He {did not pass}.' },
+            { s: 36.30, e: 36.98, t: 'Everyone said,' },
+            { s: 37.58, e: 38.53, t: '"We {knew it} all along."' },
+            { s: 39.20, e: 41.20, t: 'The next time, Tanvir told\n{no one} about it.' },
+            { s: 41.88, e: 43.63, t: 'He studied {quietly} for a year.' },
+            { s: 44.34, e: 47.53, t: 'On result day, he placed the\n{result} in his father\'s hands.' },
+            { s: 48.23, e: 49.25, t: 'The {lesson} is simple.' },
+            { s: 49.72, e: 52.61, t: 'You do not need to {announce every dream} before the work is done.' },
+            { s: 53.28, e: 55.39, t: '{Work} first, {announcement} later.' },
+          ];"""
+          p.write_text(s[:start] + caps + s[end:])
+          p = Path("src/data.ts")
+          s = p.read_text().replace("tag: 'রাতের পড়া'", "tag: 'Late-night study'").replace("tag: 'চায়ের দোকান'", "tag: 'At the tea stall'").replace("tag: 'তিন দিন পরে'", "tag: 'Three days later'").replace("tag: 'আত্মীয়রা'", "tag: 'Relatives'").replace("tag: 'বন্ধুরা'", "tag: 'Friends'").replace("tag: 'পড়ার ঘর'", "tag: 'Study room'").replace("tag: 'এক বছর পরে'", "tag: 'One year later'").replace("tag: 'রেজাল্টের দিন'", "tag: 'Result day'")
+          p.write_text(s)
+          p = Path("src/scenes.tsx")
+          s = p.read_text()
+          for a,b in {
+            "বিসিএস":"BCS", "চাপ":"PRESSURE", "মনোযোগ":"FOCUS",
+            "হা হা":"HAHA", "১ বছর":"1 YEAR", "উত্তীর্ণ":"PASSED",
+            "শিক্ষাটা":"THE LESSON", "সহজ":"IS SIMPLE",
+            'n="১" text="কাজ"':'n="1" text="WORK"',
+            'n="২" text="ঘোষণা"':'n="2" text="ANNOUNCE"',
+          }.items(): s = s.replace(a,b)
+          p.write_text(s)
+          p = Path("src/theme.ts")
+          s = p.read_text().replace("'০১২৩৪৫৬৭৮৯'", "'0123456789'")
+          p.write_text(s)
+          p = Path("src/chrome.tsx")
+          s = p.read_text()
+          s = s.replace("['Hind', '600', 'hind-siliguri-bengali-600-normal.woff2'],\n  ['Hind', '700', 'hind-siliguri-bengali-700-normal.woff2'],\n  ['NSB', '800', 'noto-serif-bengali-bengali-800-normal.woff2'],", "['Arial', '400', ''],")
+          s = s.replace("new FontFace(f, `url(${staticFile('fonts/' + u)})`, { weight: w }).load()", "Promise.resolve(new FontFace(f, 'local(Arial)', { weight: w }))")
+          s = s.replace("fontFamily: 'Hind'", "fontFamily: 'Arial, sans-serif'").replace("fontFamily: 'NSB'", "fontFamily: 'Georgia, serif'")
+          p.write_text(s)
+          p = Path("src/Video.tsx")
+          s = p.read_text()
+          s = s.replace("import { TOTAL, SFX } from './data';", "import { TOTAL } from './data';")
+          s = s.replace("      <Audio src={staticFile('sfx/pad.wav')} volume={0.1} />\n", "")
+          a = s.index("      {SCENES.slice(1).map")
+          b = s.index("\n    </AbsoluteFill>", a)
+          s = s[:a] + s[b:]
+          p.write_text(s)
+          PY
+      - name: Generate English narration
+        run: |
+          python3 -m pip install --user edge-tts
+          mkdir -p public
+          ~/.local/bin/edge-tts --voice en-US-GuyNeural --rate=-12% --text "Tanvir studied all night. His dream was to pass the BCS exam. One day, he told his friend Shuvo at a tea stall, Don't tell anyone, I'm taking the BCS exam. Shuvo laughed and said, Relax, I won't tell anyone. Three days later, a neighbor asked him, I heard you're taking the BCS exam. His relatives said, Good. Let's see what happens. His friends teased him: Can you do it? Whenever Tanvir studied, he felt everyone was watching him. The pressure grew, his focus faded. The exam results came out. He did not pass. Everyone said, We knew it all along. The next time, Tanvir told no one about it. He studied quietly for a year. On result day, he placed the result in his father's hands. The lesson is simple. You do not need to announce every dream before the work is done. Work first, announcement later." --write-media public/voice.mp3
+      - name: Install dependencies and inspect English source
+        id: check
+        run: |
+          npm install --no-audit --no-fund
+          npx remotion compositions src/index.ts --log=error
+          if grep -nP '[\x{0980}-\x{09FF}]' src/*.tsx src/*.ts; then
+            echo "Bengali characters remain in source files."
+            exit 1
+          fi
+      - name: Render English 16:9 MP4
+        run: npx remotion render src/index.ts StoryVideo out/bhul-bill-video-english-16x9.mp4 --codec h264
       - name: Upload MP4
-        if: success() && steps.check.outputs.missing_assets == '0'
         uses: actions/upload-artifact@v4
         with:
-          name: bhul-bill-video-16x9
-          path: out/bhul-bill-video-16x9.mp4
+          name: bhul-bill-video-english-16x9
+          path: out/bhul-bill-video-english-16x9.mp4
           if-no-files-found: error
       - name: Publish build report
         if: always()
         run: |
+          {
+            echo "# English 16:9 build report"
+            echo
+            echo "Generated at: $(date -u)"
+            echo
+            echo "Narration: public/voice.mp3 (generated in English)"
+            echo "Captions and scene labels: translated to English"
+            echo "Original composition: 1920x1080"
+          } > project-build-report.md
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add project-build-report.md
-          git commit -m "Add Remotion build and asset report" || exit 0
+          git commit -m "Publish English video build report" || exit 0
           git push
