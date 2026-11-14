@@ -117,7 +117,7 @@ jobs:
             echo
             echo "Narration: public/voice.mp3 (generated in English)"
             echo "Captions and scene labels: translated to English"
-            echo "Original composition: 1920x1080"
+            echo "Original composition: 1920x1080"\n            echo\n            echo "## Remaining Bengali text audit"\n            if [ -s bengali-audit.txt ]; then cat bengali-audit.txt; else echo "No Bengali characters found in source files."; fi
           } > project-build-report.md
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
