@@ -1,4 +1,4 @@
-name: Inspect video project
+name: Build and render video
 on:
   workflow_dispatch:
   push:
@@ -8,42 +8,68 @@ on:
 permissions:
   contents: write
 jobs:
-  inspect:
+  build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Inspect uploaded ZIP and capture source
-        shell: bash
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - name: Extract project
         run: |
           set -euo pipefail
-          mkdir -p /tmp/video-project
-          unzip -q bhul-bill-video-builder-16x9.zip -d /tmp/video-project
-          ROOT=/tmp/video-project/bhul-bill-video-builder/template
+          unzip -q bhul-bill-video-builder-16x9.zip -d "$RUNNER_TEMP/project"
+          cp -a "$RUNNER_TEMP/project/bhul-bill-video-builder/template/." "$GITHUB_WORKSPACE/"
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+      - name: Check Remotion composition and assets
+        id: check
+        shell: bash
+        run: |
+          set +e
+          npx remotion compositions src/index.ts --log=error > "$RUNNER_TEMP/compositions.log" 2>&1
+          comp_status=$?
+          cat "$RUNNER_TEMP/compositions.log"
+          echo "composition_status=$comp_status" >> "$GITHUB_OUTPUT"
+          missing=0
+          for f in public/voice.mp3 public/fonts/hind-siliguri-bengali-600-normal.woff2 public/fonts/hind-siliguri-bengali-700-normal.woff2 public/fonts/noto-serif-bengali-bengali-800-normal.woff2 public/sfx/pad.wav public/sfx/tick.wav public/sfx/stamp.wav public/sfx/pop.wav; do
+            if [ ! -f "$f" ]; then echo "MISSING ASSET: $f"; missing=1; fi
+          done
+          echo "missing_assets=$missing" >> "$GITHUB_OUTPUT"
           {
-            echo "# Project inspection"
+            echo "# Remotion build report"
             echo
-            echo "Generated: $(date -u)"
+            echo "Composition command exit code: $comp_status"
             echo
-            echo "## Files"
-            find /tmp/video-project -maxdepth 6 -type f | sort | sed 's#^/tmp/video-project/##' | head -300
+            echo "## Composition output"
+            cat "$RUNNER_TEMP/compositions.log"
             echo
-            echo "## package.json"
-            cat "$ROOT/package.json"
-            for file in src/Root.tsx src/Video.tsx src/index.ts src/data.ts src/brand.ts src/theme.ts src/chrome.tsx src/scenes.tsx; do
-              echo
-              echo "## SOURCE: $file"
-              echo '~~~tsx'
-              cat "$ROOT/$file"
-              echo '~~~'
+            echo "## Asset check"
+            for f in public/voice.mp3 public/fonts/hind-siliguri-bengali-600-normal.woff2 public/fonts/hind-siliguri-bengali-700-normal.woff2 public/fonts/noto-serif-bengali-bengali-800-normal.woff2 public/sfx/pad.wav public/sfx/tick.wav public/sfx/stamp.wav public/sfx/pop.wav; do
+              if [ -f "$f" ]; then echo "PRESENT: $f"; else echo "MISSING: $f"; fi
             done
             echo
-            echo "## Archive summary"
-            unzip -l bhul-bill-video-builder-16x9.zip | tail -5
-          } > project-inspection.md
-      - name: Publish inspection report
+            echo "## Project instructions"
+            cat "$RUNNER_TEMP/project/bhul-bill-video-builder/SKILL.md"
+          } > project-build-report.md
+          if [ "$comp_status" -ne 0 ]; then exit "$comp_status"; fi
+      - name: Render MP4 when required media is available
+        if: steps.check.outputs.composition_status == '0' && steps.check.outputs.missing_assets == '0'
+        run: npx remotion render src/index.ts StoryVideo out/bhul-bill-video-16x9.mp4 --codec h264
+      - name: Upload MP4
+        if: success() && steps.check.outputs.missing_assets == '0'
+        uses: actions/upload-artifact@v4
+        with:
+          name: bhul-bill-video-16x9
+          path: out/bhul-bill-video-16x9.mp4
+          if-no-files-found: error
+      - name: Publish build report
+        if: always()
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add project-inspection.md
-          git commit -m "Refresh full project inspection report" || exit 0
+          git add project-build-report.md
+          git commit -m "Add Remotion build and asset report" || exit 0
           git push
