@@ -12,12 +12,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Inspect uploaded ZIP
+      - name: Inspect uploaded ZIP and capture source
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p /tmp/video-project
           unzip -q bhul-bill-video-builder-16x9.zip -d /tmp/video-project
+          ROOT=/tmp/video-project/bhul-bill-video-builder/template
           {
             echo "# Project inspection"
             echo
@@ -26,23 +27,23 @@ jobs:
             echo "## Files"
             find /tmp/video-project -maxdepth 6 -type f | sort | sed 's#^/tmp/video-project/##' | head -300
             echo
-            echo "## package.json files"
-            while IFS= read -r pkg; do
+            echo "## package.json"
+            cat "$ROOT/package.json"
+            for file in src/Root.tsx src/Video.tsx src/index.ts src/data.ts src/brand.ts src/theme.ts src/chrome.tsx src/scenes.tsx; do
               echo
-              echo "### $pkg"
-              cat "$pkg"
-            done < <(find /tmp/video-project -name package.json -not -path '*/node_modules/*')
+              echo "## SOURCE: $file"
+              echo '~~~tsx'
+              cat "$ROOT/$file"
+              echo '~~~'
+            done
             echo
-            echo "## Remotion / render config candidates"
-            find /tmp/video-project -type f \( -iname '*remotion*' -o -name 'Root.tsx' -o -name 'Video.tsx' -o -name 'index.ts' -o -name 'index.tsx' -o -name 'vite.config.*' -o -name 'tsconfig.json' \) -print | sort
-            echo
-            echo "## Archive top-level"
-            unzip -l bhul-bill-video-builder-16x9.zip | head -100
+            echo "## Archive summary"
+            unzip -l bhul-bill-video-builder-16x9.zip | tail -5
           } > project-inspection.md
       - name: Publish inspection report
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add project-inspection.md
-          git commit -m "Add automated project inspection report" || exit 0
+          git commit -m "Refresh full project inspection report" || exit 0
           git push
